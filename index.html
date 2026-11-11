@@ -524,6 +524,12 @@
     footer { padding: 20px; flex-direction: column; gap: 8px; }
   }
 </style>
+<style id="i18n-css">.i18n-sw{position:fixed;top:12px;right:12px;z-index:9999;display:flex;border:1px solid rgba(255,255,255,.25);border-radius:999px;overflow:hidden;background:rgba(10,12,16,.88);backdrop-filter:blur(6px);font:600 12px/1 system-ui,sans-serif}
+.i18n-sw button{all:unset;cursor:pointer;padding:8px 13px;color:#c8d0dc;letter-spacing:.06em}
+.i18n-sw button[aria-pressed="true"]{background:#fff;color:#0a0c10}
+.i18n-sw button:focus-visible{outline:2px solid #4cc9f0;outline-offset:-2px}
+@media print{.i18n-sw{display:none}}
+</style>
 </head>
 <body>
 
@@ -684,11 +690,11 @@
 
       <h3>En TrueNAS SCALE</h3>
       <ol class="steps">
-        <li>Ve a <strong>System → General Settings</strong></li>
+        <li>Ve a <strong>System → Advanced Settings</strong> (en 25.04 y anteriores: <strong>System → General Settings</strong>)</li>
         <li>Haz clic en <strong>Manage Configuration</strong></li>
         <li>Selecciona <strong>Download File</strong></li>
         <li>Activa la opción <strong>Export Password Secret Seed</strong> (importante para credenciales cifradas)</li>
-        <li>Descarga el archivo <code>.tar</code> y guárdalo en un lugar seguro (no en las pools)</li>
+        <li>Descarga el archivo (normalmente un <code>.tar</code> que incluye la base de datos y el secret seed) y guárdalo en un lugar seguro, <strong>fuera de las pools</strong></li>
       </ol>
 
       <h3>En TrueNAS CORE</h3>
@@ -701,9 +707,10 @@
 
       <div class="alert alert-warn">
         <div class="alert-title">⚠ Password Secret Seed</div>
-        Si no exportas el Secret Seed, las contraseñas de servicios como <code>rsync</code>, 
-        las claves de cifrado de pools y otros secretos <strong>no podrán restaurarse</strong>. 
-        Siempre actívalo.
+        Sin el Secret Seed, al restaurar TrueNAS genera uno nuevo y vacía los campos cifrados: 
+        se desactiva la autenticación SMB de los usuarios locales, se pierden las credenciales guardadas de Cloud/SSH 
+        y no se recuperan las claves de cifrado ZFS ni de discos SED. Siempre actívalo y guarda el archivo en un lugar seguro, 
+        porque contiene secretos.
       </div>
 
       <h4>Verificación del backup</h4>
@@ -712,7 +719,7 @@
 <span class="cmd">ls</span> <span class="flag">-lh</span> <span class="arg">truenas-SCALE-*.tar</span>
 
 <span class="comment"># Debería mostrar algo como:</span>
-<span class="output">-rw-r--r-- 1 pedro pedro 142K Mar 15 19:44 truenas-SCALE-24.10-backup.tar</span></pre>
+<span class="output">-rw-r--r-- 1 pedro pedro 142K Mar 15 19:44 truenas-SCALE-25.10-backup.tar</span></pre>
     </section>
 
     <!-- STEP 2 -->
@@ -826,20 +833,20 @@ config:
       <h3>Paso 1 — Descargar la ISO de TrueNAS</h3>
       <ol class="steps">
         <li>
-          Ve a <strong>https://www.truenas.com/download-truenas-scale/</strong> 
+          Ve a <strong>https://www.truenas.com/download/</strong> 
           (o <code>/truenas-core/</code> si usas CORE)
         </li>
         <li>
           Descarga la misma versión que tenías instalada — o una más nueva. 
-          El archivo tendrá un nombre como <code>TrueNAS-SCALE-24.10.2.iso</code>
+          El archivo tendrá un nombre como <code>TrueNAS-SCALE-25.10.8.iso</code>
         </li>
         <li>
           Opcionalmente, verifica el checksum SHA256 para confirmar que la descarga es íntegra:
           <pre><span class="comment"># Windows (PowerShell)</span>
-<span class="cmd">Get-FileHash</span> <span class="arg">TrueNAS-SCALE-24.10.2.iso</span> <span class="flag">-Algorithm</span> <span class="var">SHA256</span>
+<span class="cmd">Get-FileHash</span> <span class="arg">TrueNAS-SCALE-25.10.8.iso</span> <span class="flag">-Algorithm</span> <span class="var">SHA256</span>
 
 <span class="comment"># Linux / Mac</span>
-<span class="cmd">sha256sum</span> <span class="arg">TrueNAS-SCALE-24.10.2.iso</span></pre>
+<span class="cmd">sha256sum</span> <span class="arg">TrueNAS-SCALE-25.10.8.iso</span></pre>
           Compara el resultado con el hash publicado en la página de descargas de TrueNAS.
         </li>
       </ol>
@@ -927,7 +934,7 @@ config:
           <tr>
             <td><strong>Rufus</strong></td>
             <td>Windows</td>
-            <td>Selecciona USB → SELECT ISO → Partition scheme: MBR → START</td>
+            <td>Selecciona USB → SELECT ISO → START (si Rufus pregunta el modo de escritura, elige «DD Image»)</td>
           </tr>
           <tr>
             <td><strong>dd</strong></td>
@@ -952,7 +959,7 @@ config:
             El instalador sobreescribe el destino por completo.
           </div>
         </li>
-        <li>Establece la contraseña de root cuando se pida</li>
+        <li>Define la cuenta de administración cuando se pida: en versiones recientes el instalador ofrece un usuario administrador (<code>truenas_admin</code>); en las antiguas, la contraseña de <code>root</code></li>
         <li>Cuando termine, selecciona <strong>Reboot</strong></li>
         <li>Retira el USB instalador antes de que arranque</li>
       </ol>
@@ -1003,7 +1010,9 @@ config:
 <span class="output">   pool: tank
      id: 12345678901234567
   state: ONLINE
- action: Online the device using 'zpool online' or replace the device with 'zpool replace'.
+ status: The pool was last accessed by another system.
+ action: The pool can be imported using its name or numeric identifier and
+	the '-f' flag.
  config:
         tank        ONLINE
           mirror-0  ONLINE
@@ -1023,10 +1032,11 @@ config:
 <span class="cmd">zpool</span> <span class="arg">import</span> <span class="flag">-l</span> <span class="var">tank</span></pre>
 
       <div class="alert alert-info">
-        <div class="alert-title">ℹ️ Estado EXPORTED vs ONLINE</div>
-        Cuando TrueNAS se apaga correctamente, exporta las pools (estado <code>EXPORTED</code>). 
-        Si el apagado fue forzado, pueden aparecer como <code>ONLINE</code> con el aviso 
-        "pool was previously in use". Puedes importarlas igualmente con <code>zpool import -f tank</code>.
+        <div class="alert-title">ℹ️ «The pool was last accessed by another system»</div>
+        TrueNAS <strong>no exporta</strong> las pools al apagar. Al instalar de cero, el sistema nuevo tiene otro 
+        identificador (hostid) y ZFS avisa de que la pool la usó otro sistema. Es normal: con la WebUI el 
+        asistente de importación lo gestiona, y por consola basta <code>zpool import -f tank</code> 
+        (solo si estás seguro de que el sistema anterior está apagado y no hay otra máquina usando los discos).
       </div>
 
       <h3>Verificar importación</h3>
@@ -1059,7 +1069,7 @@ tank     7.27T  4.12T  3.15T    4%         -  ONLINE  -</span></pre>
 
       <h3>En TrueNAS SCALE</h3>
       <ol class="steps">
-        <li>Ve a <strong>System → General Settings → Manage Configuration</strong></li>
+        <li>Ve a <strong>System → Advanced Settings → Manage Configuration</strong> (en 25.04 y anteriores: <strong>System → General Settings</strong>)</li>
         <li>Haz clic en <strong>Upload File</strong></li>
         <li>Selecciona el archivo <code>.tar</code> que descargaste en el paso 1</li>
         <li>El sistema aplicará la configuración y se <strong>reiniciará automáticamente</strong></li>
@@ -1075,10 +1085,14 @@ tank     7.27T  4.12T  3.15T    4%         -  ONLINE  -</span></pre>
       </ol>
 
       <div class="alert alert-warn">
-        <div class="alert-title">⚠ Orden importa</div>
-        Importa las pools <strong>ANTES</strong> de restaurar la configuración. 
-        Si restauras la config primero, TrueNAS intentará montar datasets que aún no existen 
-        y pueden aparecer errores que se resuelven solos al importar después, pero es más limpio en el orden correcto.
+        <div class="alert-title">⚠ Orden y red</div>
+        La documentación oficial indica subir el archivo de configuración tras una instalación nueva; como la 
+        configuración recuerda las pools, estas suelen volver solas al reiniciar. Esta guía importa primero las pools 
+        (como paso explícito) y después restaura la configuración; si tras el reinicio alguna pool no aparece, usa 
+        <strong>Storage → Import Pool</strong>. Importante: la configuración incluye la red. Si el servidor tenía IP estática 
+        o nombres de interfaz distintos, puede dejar de responder; ten teclado y monitor a mano. No restaures una 
+        config de CORE (FreeBSD) en SCALE como si fuera una migración normal: es un cambio de plataforma y sustituye los 
+        usuarios administradores por el <code>root</code> original.
       </div>
 
       <h3>Qué se restaura con el backup</h3>
@@ -1090,8 +1104,8 @@ tank     7.27T  4.12T  3.15T    4%         -  ONLINE  -</span></pre>
           <tr><td>Usuarios y grupos locales</td><td>Los datos en sí (están en ZFS)</td></tr>
           <tr><td>Shares SMB, NFS, iSCSI, WebDAV</td><td>VMs y jails (solo metadatos, no el contenido)</td></tr>
           <tr><td>Configuración de red (IPs, VLANs)</td><td>Plugins de terceros</td></tr>
-          <tr><td>Servicios (SSH, FTP, etc.)</td><td>Certificados Let's Encrypt (requieren re-emisión)</td></tr>
-          <tr><td>Tareas de replicación y snapshots</td><td>Apps de TrueNAS SCALE (en ix-applications)</td></tr>
+          <tr><td>Servicios (SSH, FTP, etc.)</td><td>Certificados ACME/Let's Encrypt (comprueba su estado y renueva si hace falta)</td></tr>
+          <tr><td>Tareas de replicación y snapshots</td><td>Datos de las apps de SCALE (viven en el dataset de apps de la pool; hay que volver a elegir la pool de apps)</td></tr>
           <tr><td>Credenciales Cloud Sync</td><td></td></tr>
         </tbody>
       </table>
@@ -1223,10 +1237,11 @@ tank     7.27T  4.12T  3.15T    4%         -  ONLINE  -</span></pre>
 
       <h3>❌ Apps de TrueNAS SCALE no funcionan</h3>
       <p>
-        Las apps (ix-applications) son complejas de migrar. Si tenías apps de Kubernetes, 
-        necesitarás reinstalarlas. Los datos de las apps suelen estar en un dataset 
-        <code>ix-applications</code> que puedes volver a asignar como directorio de apps 
-        desde <strong>Apps → Settings → Choose Pool</strong>.
+        Las apps son lo más delicado de migrar. Hasta 24.04 se ejecutaban sobre Kubernetes y desde 24.10 sobre Docker; 
+        sus datos viven en un dataset de apps dentro de la pool (<code>ix-applications</code> en las versiones antiguas, 
+        <code>ix-apps</code> en las recientes). Tras importar la pool, vuelve a seleccionarla como pool de apps desde la 
+        sección <strong>Apps</strong> (<strong>Choose Pool</strong>). Si tu versión nueva usa otro motor de apps que la antigua, 
+        puede que tengas que reinstalar las apps y reapuntarlas a tus datasets.
       </p>
     </section>
 
@@ -1250,24 +1265,27 @@ tank     7.27T  4.12T  3.15T    4%         -  ONLINE  -</span></pre>
       <h3>🔵 Boot Mirror: dos USBs en espejo</h3>
       <p>
         TrueNAS permite instalar en dos USBs en modo mirror. Si uno falla, el otro sigue funcionando 
-        sin intervención. Ve a <strong>System → Boot Pool Status</strong> → 
+        sin intervención. Ve a <strong>System → Boot → Boot Pool Status</strong> → 
         <strong>Attach</strong> para añadir un segundo dispositivo al mirror de arranque.
       </p>
 
       <h3>🔵 Automatiza el backup de configuración</h3>
       <p>
         Configura un script que exporte la configuración periódicamente a una pool o ubicación externa. 
-        En TrueNAS SCALE puedes usar un script en <strong>System → Advanced → Init/Shutdown Scripts</strong>.
+        Prográmalo como tarea periódica en <strong>System → Advanced Settings → Cron Jobs</strong> (los <em>Init/Shutdown Scripts</em> solo se ejecutan al arrancar o apagar). 
+        Un <code>cp</code> es una copia rápida de apoyo; el archivo oficial y portable sigue siendo <strong>Manage Configuration → Download File</strong> con el secret seed.
       </p>
 
       <pre><span class="comment">#!/bin/bash
-# Script de backup automático de config TrueNAS</span>
+# Script de backup automático de config TrueNAS
+# (el secret seed da acceso a datos cifrados: permisos restringidos)</span>
+<span class="cmd">umask</span> <span class="arg">077</span>
 <span class="var">DEST</span>=<span class="arg">"/mnt/tank/backups/truenas-config"</span>
 <span class="var">DATE</span>=<span class="arg">$(date +%Y%m%d_%H%M)</span>
-<span class="cmd">mkdir</span> <span class="flag">-p</span> <span class="var">$DEST</span>
-<span class="comment"># TrueNAS SCALE guarda el config en:</span>
-<span class="cmd">cp</span> <span class="var">/data/freenas-v1.db</span> <span class="var">$DEST/config_$DATE.db</span>
-<span class="cmd">cp</span> <span class="var">/data/pwenc_secret</span> <span class="var">$DEST/secret_$DATE</span>
+<span class="cmd">mkdir</span> <span class="flag">-p</span> <span class="var">"$DEST"</span>
+<span class="comment"># TrueNAS guarda la base de datos de configuración y el secret seed en:</span>
+<span class="cmd">cp</span> <span class="var">/data/freenas-v1.db</span> <span class="var">"$DEST/config_$DATE.db"</span>
+<span class="cmd">cp</span> <span class="var">/data/pwenc_secret</span> <span class="var">"$DEST/secret_$DATE"</span>
 <span class="comment"># Mantener solo los últimos 10 backups</span>
 <span class="cmd">ls</span> <span class="flag">-t</span> <span class="var">$DEST/config_*.db</span> | <span class="cmd">tail</span> <span class="flag">-n +11</span> | <span class="cmd">xargs rm</span> <span class="flag">-f</span></pre>
 
@@ -1294,5 +1312,68 @@ tank     7.27T  4.12T  3.15T    4%         -  ONLINE  -</span></pre>
   <div>2025 · Uso libre</div>
 </footer>
 
+<!-- i18n:start -->
+<script id="i18n-data" type="application/json">{"__title": "TrueNAS · USB-to-USB Migration", "__desc": "How to replace the TrueNAS boot device (USB, DOM or small SSD) with a new one while keeping all your ZFS pools, datasets, shares, users and configuration intact.", "Guía Técnica": "Technical Guide", "Tutorial completo": "Complete tutorial", "Migrar TrueNAS<br>de <em>USB a USB<\/em>": "Migrate TrueNAS<br>from <em>USB to USB<\/em>", "Cómo reemplazar el dispositivo de arranque de TrueNAS (USB, DOM o SSD pequeño) por uno nuevo, manteniendo todas tus pools ZFS, datasets, shares, usuarios y configuración intactos.": "How to replace the TrueNAS boot device (USB, DOM or small SSD) with a new one, keeping all your ZFS pools, datasets, shares, users and configuration intact.", "Downtime breve requerido": "Short downtime required", "Backup previo obligatorio": "Prior backup mandatory", "Preparación": "Preparation", "<span class=\"step-num\">✦<\/span> Visión general": "<span class=\"step-num\">✦<\/span> Overview", "<span class=\"step-num\">✦<\/span> Requisitos previos": "<span class=\"step-num\">✦<\/span> Prerequisites", "Proceso": "Process", "<span class=\"step-num\">01<\/span> Backup de config": "<span class=\"step-num\">01<\/span> Config backup", "<span class=\"step-num\">02<\/span> Anotar pools &amp; discos": "<span class=\"step-num\">02<\/span> Note pools &amp; disks", "<span class=\"step-num\">03<\/span> Apagar el sistema": "<span class=\"step-num\">03<\/span> Shut down the system", "<span class=\"step-num\">04<\/span> Instalar TrueNAS nuevo": "<span class=\"step-num\">04<\/span> Install new TrueNAS", "<span class=\"step-num\">05<\/span> Importar pools ZFS": "<span class=\"step-num\">05<\/span> Import ZFS pools", "<span class=\"step-num\">06<\/span> Restaurar configuración": "<span class=\"step-num\">06<\/span> Restore configuration", "<span class=\"step-num\">07<\/span> Verificación final": "<span class=\"step-num\">07<\/span> Final verification", "Problemas comunes": "Common problems", "Tips &amp; notas": "Tips &amp; notes", "¿Cómo funciona esto?": "How does this work?", "Entender la arquitectura antes de tocar nada": "Understand the architecture before touching anything", "TrueNAS separa completamente el <strong>sistema operativo<\/strong> (instalado en el USB/DOM/SSD de arranque) de los <strong>datos<\/strong> (almacenados en las pools ZFS sobre los discos de datos). Esto significa que puedes reemplazar el dispositivo de arranque sin tocar tus datos en absoluto.": "TrueNAS completely separates the <strong>operating system<\/strong> (installed on the boot USB/DOM/SSD) from the <strong>data<\/strong> (stored in ZFS pools on the data disks). This means you can replace the boot device without touching your data at all.", "<span class=\"hi\">┌─────────────────────────────────────────────────────────┐<\/span> <span class=\"hi\">│ SERVIDOR TRUENAS │<\/span> <span class=\"hi\">│ │<\/span> <span class=\"hi2\">│ [USB de arranque]<\/span> ←── Sistema operativo TrueNAS │ <span class=\"hi2\">│ OS + Config + DB<\/span> ←── Configuración (exportable) │ <span class=\"hi\">│ │<\/span> <span class=\"hi3\">│ [Disco 1] [Disco 2]<\/span> ←── Pool ZFS \"tank\" │ <span class=\"hi3\">│ [Disco 3] [Disco 4]<\/span> ←── Pool ZFS \"backup\" │ <span class=\"hi\">│ │<\/span> <span class=\"hi\">│ Las pools ZFS son INDEPENDIENTES del USB de arranque │<\/span> <span class=\"hi\">└─────────────────────────────────────────────────────────┘<\/span>": "<span class=\"hi\">┌─────────────────────────────────────────────────────────┐<\/span>\n<span class=\"hi\">│  TRUENAS SERVER                                         │<\/span>\n<span class=\"hi\">│                                                         │<\/span>\n<span class=\"hi2\">│  [Boot USB]<\/span>           ←── TrueNAS operating system       │\n<span class=\"hi2\">│  OS + Config + DB<\/span>   ←── Configuration (exportable)     │\n<span class=\"hi\">│                                                         │<\/span>\n<span class=\"hi3\">│  [Disk 1] [Disk 2]<\/span>   ←── ZFS pool \"tank\"               │\n<span class=\"hi3\">│  [Disk 3] [Disk 4]<\/span>   ←── ZFS pool \"backup\"             │\n<span class=\"hi\">│                                                         │<\/span>\n<span class=\"hi\">│  The ZFS pools are INDEPENDENT of the boot USB          │<\/span>\n<span class=\"hi\">└─────────────────────────────────────────────────────────┘<\/span>", "✓ Tranquilidad": "✓ Peace of mind", "Tus datos en las pools ZFS": "Your data in the ZFS pools", "no se tocan en ningún momento": "is never touched", ". ZFS guarda todos los metadatos de la pool en los propios discos de datos, no en el USB de arranque.": ". ZFS keeps all of the pool's metadata on the data disks themselves, not on the boot USB.", "El proceso en resumen": "The process in short", "Exportar el backup de configuración de TrueNAS (archivo <code>.tar<\/code>)": "Export the TrueNAS configuration backup (<code>.tar<\/code> file)", "Anotar nombres de pools y estado actual": "Note pool names and their current state", "Apagar, retirar USB viejo, insertar USB nuevo": "Shut down, remove the old USB, insert the new USB", "Instalar TrueNAS limpio en el USB nuevo": "Do a clean TrueNAS install on the new USB", "Importar las pools ZFS existentes": "Import the existing ZFS pools", "Restaurar el backup de configuración": "Restore the configuration backup", "Verificar que todo funciona": "Verify that everything works", "Requisitos previos": "Prerequisites", "Lo que necesitas tener antes de empezar": "What you need before you start", "Material físico": "Physical hardware", "USB nuevo (mínimo 16 GB, recomendado 32 GB+, preferiblemente industrial/SLC)": "New USB (minimum 16 GB, 32 GB+ recommended, preferably industrial/SLC)", "Otro USB o PC para crear el instalador de TrueNAS": "Another USB or PC to create the TrueNAS installer", "Acceso físico al servidor (o IPMI/iDRAC)": "Physical access to the server (or IPMI/iDRAC)", "Software": "Software", "<strong>Balena Etcher<\/strong> o <strong>Rufus<\/strong> para crear el USB instalador": "<strong>Balena Etcher<\/strong> or <strong>Rufus<\/strong> to create the installer USB", "ISO de TrueNAS SCALE o CORE — <strong>misma versión<\/strong> que tienes instalada (o más nueva)": "TrueNAS SCALE or CORE ISO — the <strong>same version<\/strong> you have installed (or newer)", "Acceso a la WebUI de TrueNAS antes del proceso": "Access to the TrueNAS WebUI before the process", "⚠ Versión del instalador": "⚠ Installer version", "Usa la": "Use the", "misma versión": "same version", "de TrueNAS que tenías instalada, o una más nueva. Nunca instales una versión más antigua, ya que las pools ZFS creadas con versiones superiores pueden no ser importables.": "of TrueNAS you had installed, or a newer one. Never install an older version, because ZFS pools created with newer versions may not be importable.", "✗ NUNCA hagas esto": "✗ NEVER do this", "<span style=\"position:absolute;left:0;color:var(--danger)\">×<\/span> No insertes el USB nuevo con el servidor encendido (a menos que sea hot-plug confirmado)": "<span style=\"position:absolute;left:0;color:var(--danger)\">×<\/span> Don't insert the new USB while the server is powered on (unless hot-plug is confirmed)", "<span style=\"position:absolute;left:0;color:var(--danger)\">×<\/span> No formatees ni toques los discos de datos": "<span style=\"position:absolute;left:0;color:var(--danger)\">×<\/span> Don't format or touch the data disks", "<span style=\"position:absolute;left:0;color:var(--danger)\">×<\/span> No saltes el paso del backup de configuración": "<span style=\"position:absolute;left:0;color:var(--danger)\">×<\/span> Don't skip the configuration backup step", "Exportar backup de configuración": "Export the configuration backup", "El archivo más importante de todo el proceso": "The most important file of the whole process", "Desde la WebUI de TrueNAS, exporta la configuración completa del sistema. Este archivo contiene usuarios, grupos, shares SMB/NFS, tareas, datasets, credenciales y toda la configuración del sistema operativo (pero <em>no<\/em> los datos en sí).": "From the TrueNAS WebUI, export the full system configuration. This file contains users, groups, SMB/NFS shares, tasks, datasets, credentials and all operating-system settings (but <em>not<\/em> the data itself).", "En TrueNAS SCALE": "On TrueNAS SCALE", "Ve a <strong>System → Advanced Settings<\/strong> (en 25.04 y anteriores: <strong>System → General Settings<\/strong>)": "Go to <strong>System → Advanced Settings<\/strong> (in 25.04 and earlier: <strong>System → General Settings<\/strong>)", "Haz clic en <strong>Manage Configuration<\/strong>": "Click <strong>Manage Configuration<\/strong>", "Selecciona <strong>Download File<\/strong>": "Select <strong>Download File<\/strong>", "Activa la opción <strong>Export Password Secret Seed<\/strong> (importante para credenciales cifradas)": "Enable the <strong>Export Password Secret Seed<\/strong> option (important for encrypted credentials)", "Descarga el archivo (normalmente un <code>.tar<\/code> que incluye la base de datos y el secret seed) y guárdalo en un lugar seguro, <strong>fuera de las pools<\/strong>": "Download the file (normally a <code>.tar<\/code> containing the database and the secret seed) and keep it somewhere safe, <strong>outside the pools<\/strong>", "En TrueNAS CORE": "On TrueNAS CORE", "Ve a <strong>System → General<\/strong>": "Go to <strong>System → General<\/strong>", "Haz clic en <strong>Save Config<\/strong>": "Click <strong>Save Config<\/strong>", "Marca <strong>Export Password Secret Seed<\/strong>": "Check <strong>Export Password Secret Seed<\/strong>", "Guarda el archivo <code>.db<\/code> resultante": "Save the resulting <code>.db<\/code> file", "⚠ Password Secret Seed": "⚠ Password Secret Seed", "Sin el Secret Seed, al restaurar TrueNAS genera uno nuevo y vacía los campos cifrados: se desactiva la autenticación SMB de los usuarios locales, se pierden las credenciales guardadas de Cloud/SSH y no se recuperan las claves de cifrado ZFS ni de discos SED. Siempre actívalo y guarda el archivo en un lugar seguro, porque contiene secretos.": "Without the Secret Seed, on restore TrueNAS generates a new one and empties the encrypted fields: SMB authentication for local users is disabled, saved Cloud/SSH credentials are lost, and ZFS and SED encryption keys are not recovered. Always enable it and keep the file somewhere safe, because it contains secrets.", "Verificación del backup": "Backup verification", "Comprueba que el archivo se descargó correctamente y tiene un tamaño razonable (no 0 bytes):": "Check that the file downloaded correctly and has a reasonable size (not 0 bytes):", "# En Linux/Mac — verificar que el archivo existe y no está vacío": "# On Linux/Mac — check that the file exists and is not empty", "# Debería mostrar algo como:": "# It should show something like:", "Anotar pools y estado de discos": "Note pools and disk status", "Información crítica para la importación posterior": "Critical information for the later import", "Antes de apagar, recoge información sobre tus pools. Aunque ZFS puede re-descubrir las pools automáticamente, es útil tener esta información a mano.": "Before shutting down, collect information about your pools. Although ZFS can rediscover the pools automatically, it is useful to have this information at hand.", "Desde la WebUI": "From the WebUI", "Ve a <strong>Storage<\/strong> y anota el nombre de cada pool (ej: <code>tank<\/code>, <code>data<\/code>, <code>backup<\/code>)": "Go to <strong>Storage<\/strong> and note the name of each pool (e.g. <code>tank<\/code>, <code>data<\/code>, <code>backup<\/code>)", "Confirma que todas las pools están en estado <span class=\"tag tag-scale\">ONLINE<\/span>": "Confirm that all pools are in <span class=\"tag tag-scale\">ONLINE<\/span> state", "Haz una captura de pantalla de la vista de discos si quieres referencia visual": "Take a screenshot of the disks view if you want a visual reference", "Desde la consola / SSH": "From the console / SSH", "# Ver todas las pools y su estado": "# List all pools and their status", "# Ver estado detallado con discos": "# Detailed status including disks", "# Exportar la info completa a un archivo (copia esto también al backup)": "# Export the full info to a file (copy this to the backup as well)", "La salida te mostrará algo así:": "The output will look something like this:", "# Y con zpool status:": "# And with zpool status:", "ℹ️ GUID de pools": "ℹ️ Pool GUIDs", "ZFS identifica las pools por GUID (identificador único), no por nombre del disco. Por eso una pool puede importarse aunque los discos cambien de nombre de": "ZFS identifies pools by GUID (unique identifier), not by disk name. That is why a pool can be imported even if the disks change name from", "Apagar el sistema correctamente": "Shut down the system properly", "Shutdown limpio para proteger la integridad ZFS": "Clean shutdown to protect ZFS integrity", "Es importante hacer un apagado limpio para que ZFS haga checkpoint y cierre las pools correctamente.": "A clean shutdown matters so ZFS can checkpoint and close the pools correctly.", "Desde WebUI": "From the WebUI", "Ve a la esquina superior derecha → botón de encendido": "Go to the top-right corner → power button", "Selecciona <strong>Shut Down<\/strong>": "Select <strong>Shut Down<\/strong>", "Confirma y espera a que el sistema se apague completamente": "Confirm and wait for the system to power off completely", "Desde consola / SSH": "From the console / SSH", "✗ No desenchufes sin apagar": "✗ Don't pull the plug without shutting down", "Forzar el apagado puede dejar las pools ZFS en estado \"dirty\". Aunque ZFS tiene journaling y se recupera, es mejor no arriesgarse.": "Forcing a power-off can leave the ZFS pools in a \"dirty\" state. ZFS journals and recovers, but it is better not to take the risk.", "Una vez apagado, <strong>extrae el USB viejo<\/strong> de su slot. Guárdalo por si necesitas volver atrás. Inserta el USB nuevo en el mismo puerto.": "Once powered off, <strong>remove the old USB<\/strong> from its slot. Keep it in case you need to go back. Insert the new USB in the same port.", "Instalar TrueNAS en el USB nuevo": "Install TrueNAS on the new USB", "Instalación limpia — igual que la primera vez": "Clean installation — just like the first time", "Crear el USB instalador": "Create the installer USB", "Necesitas un segundo USB temporal que actuará de instalador. Lo usarás solo durante la instalación y luego puedes reutilizarlo. El método recomendado es <strong>Balena Etcher<\/strong> por su simplicidad y fiabilidad en cualquier sistema operativo.": "You need a second, temporary USB that will act as the installer. You will only use it during the installation and can reuse it afterwards. The recommended method is <strong>Balena Etcher<\/strong> for its simplicity and reliability on any operating system.", "Paso 1 — Descargar la ISO de TrueNAS": "Step 1 — Download the TrueNAS ISO", "Ve a <strong>https://www.truenas.com/download/<\/strong> (o <code>/truenas-core/<\/code> si usas CORE)": "Go to <strong>https://www.truenas.com/download/<\/strong> (for CORE, the <em>TrueNAS Legacy<\/em> page: https://www.truenas.com/truenas-legacy/)", "Descarga la misma versión que tenías instalada — o una más nueva. El archivo tendrá un nombre como <code>TrueNAS-SCALE-25.10.8.iso<\/code>": "Download the same version you had installed — or a newer one. The file will have a name like <code>TrueNAS-SCALE-25.10.8.iso<\/code>", "Opcionalmente, verifica el checksum SHA256 para confirmar que la descarga es íntegra:": "Optionally, verify the SHA256 checksum to confirm the download is intact:", "# Windows (PowerShell)": "# Windows (PowerShell)", "# Linux / Mac": "# Linux / Mac", "Compara el resultado con el hash publicado en la página de descargas de TrueNAS.": "Compare the result with the hash published on the TrueNAS downloads page.", "Paso 2 — Descargar e instalar Balena Etcher": "Step 2 — Download and install Balena Etcher", "Descarga la versión para tu OS (Windows Installer, macOS DMG, o Linux AppImage)": "Download the version for your OS (Windows Installer, macOS DMG, or Linux AppImage)", "Instala y abre Balena Etcher": "Install and open Balena Etcher", "Paso 3 — Grabar la ISO en el USB instalador": "Step 3 — Write the ISO to the installer USB", "Usa un USB de al menos 8 GB para el instalador. <strong>No uses el USB nuevo de destino<\/strong> — ese es donde instalarás TrueNAS después.": "Use a USB of at least 8 GB for the installer. <strong>Don't use the new target USB<\/strong> — that is where you will install TrueNAS later.", "Interfaz de Balena Etcher — flujo de 3 pasos": "Balena Etcher interface — 3-step flow", "Haz clic aquí primero": "Click here first", "Selecciona el archivo<br><code style=\"color:var(--accent2)\">TrueNAS-SCALE-*.iso<\/code><br>que descargaste": "Select the file<br><code style=\"color:var(--accent2)\">TrueNAS-SCALE-*.iso<\/code><br>you downloaded", "Selecciona el USB": "Select the USB", "Elige el USB instalador<br>(el temporal, no el<br>USB destino de TrueNAS)": "Choose the installer USB<br>(the temporary one, not the<br>TrueNAS target USB)", "Pulsa Flash!": "Press Flash!", "Espera ~3-5 min<br>Etcher verifica al<br>terminar automáticamente": "Wait ~3-5 min<br>Etcher verifies<br>automatically when done", "Etcher pedirá permisos de administrador — es necesario para escribir directamente en el dispositivo. Al finalizar mostrará <span style=\"color:var(--accent3)\">✓ Flash Complete!<\/span> con la verificación superada.": "Etcher will ask for administrator permissions — this is needed to write directly to the device. When finished it will show <span style=\"color:var(--accent3)\">✓ Flash Complete!<\/span> with verification passed.", "⚠ Etcher borrará el USB instalador por completo": "⚠ Etcher will completely erase the installer USB", "Todo el contenido del USB seleccionado como target se eliminará. Asegúrate de no seleccionar por error el USB nuevo donde instalarás TrueNAS, ni ningún disco externo con datos importantes.": "All content on the USB selected as the target will be deleted. Make sure you don't accidentally select the new USB where you will install TrueNAS, or any external disk with important data.", "Alternativas si no tienes Balena Etcher": "Alternatives if you don't have Balena Etcher", "Herramienta": "Tool", "Pasos resumidos": "Summary of steps", "Selecciona USB → SELECT ISO → START (si Rufus pregunta el modo de escritura, elige «DD Image»)": "Select USB → SELECT ISO → START (if Rufus asks for the write mode, choose \"DD Image\")", "Proceso de instalación": "Installation process", "Conecta el USB instalador y el USB destino (nuevo) al servidor": "Connect the installer USB and the (new) target USB to the server", "Arranca desde el USB instalador (F11/F12/DEL en BIOS para el boot menu)": "Boot from the installer USB (F11/F12/DEL in the BIOS for the boot menu)", "Espera a que cargue el instalador de TrueNAS": "Wait for the TrueNAS installer to load", "Selecciona <strong>Install/Upgrade<\/strong>": "Select <strong>Install/Upgrade<\/strong>", "Cuando pregunte dónde instalar, selecciona el": "When it asks where to install, select the", "USB nuevo": "new USB", "✗ CRÍTICO — Selección del destino": "✗ CRITICAL — Target selection", "Asegúrate de seleccionar el USB nuevo y": "Make sure you select the new USB and", "NO los discos de datos": "NOT the data disks", ". Compara los tamaños: tu USB nuevo (16-32 GB) vs tus discos de datos (TB). El instalador sobreescribe el destino por completo.": ". Compare sizes: your new USB (16-32 GB) vs your data disks (TB). The installer overwrites the target completely.", "Define la cuenta de administración cuando se pida: en versiones recientes el instalador ofrece un usuario administrador (<code>truenas_admin<\/code>); en las antiguas, la contraseña de <code>root<\/code>": "Set up the administrator account when prompted: recent versions offer an administrator user (<code>truenas_admin<\/code>); older ones ask for the <code>root<\/code> password", "Cuando termine, selecciona <strong>Reboot<\/strong>": "When it finishes, select <strong>Reboot<\/strong>", "Retira el USB instalador antes de que arranque": "Remove the installer USB before it boots", "Primera vez que arranca": "First boot", "TrueNAS arrancará en un sistema limpio. Verás la IP asignada por DHCP en la consola. Accede a la WebUI con esa IP desde un navegador.": "TrueNAS will boot into a clean system. You will see the DHCP-assigned IP on the console. Open the WebUI at that IP from a browser.", "# La consola mostrará algo así:": "# The console will show something like:", "Importar las pools ZFS": "Import the ZFS pools", "Reconectar tus datos al nuevo sistema": "Reconnect your data to the new system", "Este es el paso más importante. TrueNAS instalado de cero no conoce tus pools, pero ZFS puede descubrirlas automáticamente leyendo los metadatos en los propios discos.": "This is the most important step. A freshly installed TrueNAS doesn't know your pools, but ZFS can discover them automatically by reading the metadata on the disks themselves.", "Método 1: Desde la WebUI (recomendado)": "Method 1: From the WebUI (recommended)", "Accede a la WebUI del TrueNAS recién instalado": "Open the WebUI of the freshly installed TrueNAS", "Ve a <strong>Storage → Import Pool<\/strong>": "Go to <strong>Storage → Import Pool<\/strong>", "TrueNAS escaneará los discos y mostrará las pools disponibles": "TrueNAS will scan the disks and show the available pools", "Selecciona cada pool que quieras importar": "Select each pool you want to import", "Si las pools estaban cifradas, se te pedirá la passphrase o el keyfile": "If the pools were encrypted, you will be asked for the passphrase or keyfile", "Haz clic en <strong>Import<\/strong> y espera a que complete": "Click <strong>Import<\/strong> and wait for it to finish", "Repite para cada pool adicional": "Repeat for each additional pool", "Método 2: Desde consola (alternativo)": "Method 2: From the console (alternative)", "Si la WebUI no detecta las pools o prefieres la consola:": "If the WebUI doesn't detect the pools or you prefer the console:", "# Buscar pools importables (no las importa aún)": "# Look for importable pools (doesn't import them yet)", "# La salida mostrará las pools disponibles:": "# The output will show the available pools:", "# Importar una pool específica": "# Import a specific pool", "# Importar todas las pools encontradas de una vez": "# Import all the pools found at once", "# Si la pool tiene un nombre diferente o hay conflicto, importar por GUID": "# If the pool has a different name or there is a conflict, import by GUID", "# Para pools cifradas con encryption key": "# For pools encrypted with an encryption key", "ℹ️ «The pool was last accessed by another system»": "ℹ️ \"The pool was last accessed by another system\"", "TrueNAS": "TrueNAS", "no exporta": "does not export", "las pools al apagar. Al instalar de cero, el sistema nuevo tiene otro identificador (hostid) y ZFS avisa de que la pool la usó otro sistema. Es normal: con la WebUI el asistente de importación lo gestiona, y por consola basta": "the pools on shutdown. On a clean install, the new system has a different identifier (hostid) and ZFS warns that the pool was used by another system. That is normal: in the WebUI the import wizard handles it, and from the console <code>zpool import -f tank<\/code> is enough", "(solo si estás seguro de que el sistema anterior está apagado y no hay otra máquina usando los discos).": "(only if you are sure the previous system is powered off and no other machine is using the disks).", "Verificar importación": "Verify the import", "# Verificar que las pools se importaron correctamente": "# Check that the pools were imported correctly", "# Verificar datasets": "# Check datasets", "# Todo debería estar ONLINE": "# Everything should be ONLINE", "Restaurar la configuración": "Restore the configuration", "Volver a tener todos tus shares, usuarios y servicios": "Get all your shares, users and services back", "Con las pools importadas, ahora restauramos la configuración del sistema (usuarios, SMB/NFS shares, tareas cron, etc.) desde el backup del paso 1.": "With the pools imported, we now restore the system configuration (users, SMB/NFS shares, cron tasks, etc.) from the step 1 backup.", "Ve a <strong>System → Advanced Settings → Manage Configuration<\/strong> (en 25.04 y anteriores: <strong>System → General Settings<\/strong>)": "Go to <strong>System → Advanced Settings → Manage Configuration<\/strong> (in 25.04 and earlier: <strong>System → General Settings<\/strong>)", "Haz clic en <strong>Upload File<\/strong>": "Click <strong>Upload File<\/strong>", "Selecciona el archivo <code>.tar<\/code> que descargaste en el paso 1": "Select the <code>.tar<\/code> file you downloaded in step 1", "El sistema aplicará la configuración y se <strong>reiniciará automáticamente<\/strong>": "The system will apply the configuration and <strong>reboot automatically<\/strong>", "Espera a que vuelva a estar disponible (1-3 minutos)": "Wait for it to come back up (1-3 minutes)", "Haz clic en <strong>Upload Config<\/strong>": "Click <strong>Upload Config<\/strong>", "Selecciona el archivo <code>.db<\/code> del backup": "Select the <code>.db<\/code> file from the backup", "Confirma y espera el reinicio": "Confirm and wait for the reboot", "⚠ Orden y red": "⚠ Order and networking", "La documentación oficial indica subir el archivo de configuración tras una instalación nueva; como la configuración recuerda las pools, estas suelen volver solas al reiniciar. Esta guía importa primero las pools (como paso explícito) y después restaura la configuración; si tras el reinicio alguna pool no aparece, usa": "The official documentation says to upload the configuration file after a fresh install; since the configuration remembers the pools, they usually come back on their own after the reboot. This guide imports the pools first (as an explicit step) and then restores the configuration; if a pool doesn't show up after the reboot, use", "Storage → Import Pool": "Storage → Import Pool", ". Importante: la configuración incluye la red. Si el servidor tenía IP estática o nombres de interfaz distintos, puede dejar de responder; ten teclado y monitor a mano. No restaures una config de CORE (FreeBSD) en SCALE como si fuera una migración normal: es un cambio de plataforma y sustituye los usuarios administradores por el": ". Important: the configuration includes networking. If the server had a static IP or different interface names, it may stop responding; keep a keyboard and monitor at hand. Don't restore a CORE (FreeBSD) config onto SCALE as if it were a normal migration: it is a platform change and replaces the administrator users with the original", "original.": "user.", "Qué se restaura con el backup": "What the backup restores", "Se restaura ✓": "Restored ✓", "No se restaura ✗": "Not restored ✗", "Usuarios y grupos locales": "Local users and groups", "Los datos en sí (están en ZFS)": "The data itself (it lives in ZFS)", "Shares SMB, NFS, iSCSI, WebDAV": "SMB, NFS, iSCSI, WebDAV shares", "VMs y jails (solo metadatos, no el contenido)": "VMs and jails (metadata only, not the content)", "Configuración de red (IPs, VLANs)": "Network configuration (IPs, VLANs)", "Plugins de terceros": "Third-party plugins", "Servicios (SSH, FTP, etc.)": "Services (SSH, FTP, etc.)", "Certificados ACME/Let's Encrypt (comprueba su estado y renueva si hace falta)": "ACME/Let's Encrypt certificates (check their status and renew if needed)", "Tareas de replicación y snapshots": "Replication and snapshot tasks", "Datos de las apps de SCALE (viven en el dataset de apps de la pool; hay que volver a elegir la pool de apps)": "SCALE apps data (it lives in the pool's apps dataset; you need to select the apps pool again)", "Credenciales Cloud Sync": "Cloud Sync credentials", "Verificación final": "Final verification", "Confirmar que todo está como debe": "Confirm everything is as it should be", "Checklist de verificación": "Verification checklist", "Verificación": "Check", "Dónde comprobarlo": "Where to check", "Estado esperado": "Expected state", "Estado de pools": "Pool status", "Datasets visibles": "Datasets visible", "Todos los datasets anteriores": "All the previous datasets", "Shares SMB": "SMB shares", "Mismos shares que antes": "Same shares as before", "Acceso desde red": "Network access", "Desde PC cliente": "From a client PC", "\\\\IP\\share accesible": "\\\\IP\\share accessible", "Servicios activos": "Active services", "SMB, NFS, SSH según config": "SMB, NFS, SSH depending on config", "Usuarios locales": "Local users", "Todos los usuarios del backup": "All the users from the backup", "Tareas programadas": "Scheduled tasks", "Snapshots, replicas, etc.": "Snapshots, replications, etc.", "Ejecutar un scrub de verificación": "Run a verification scrub", "Como buena práctica, lanza un scrub para verificar la integridad de los datos:": "As good practice, launch a scrub to verify data integrity:", "# Desde consola": "# From the console", "# Ver progreso": "# Check progress", "# O desde WebUI: Data Protection → Scrub Tasks → RUN NOW": "# Or from the WebUI: Data Protection → Scrub Tasks → RUN NOW", "✓ ¡Migración completada!": "✓ Migration complete!", "Si todas las verificaciones son correctas, la migración fue exitosa. Guarda el USB viejo en un cajón durante unas semanas por si acaso, luego puedes formatearlo o reutilizarlo como instalador.": "If all the checks pass, the migration was successful. Keep the old USB in a drawer for a few weeks just in case, then you can format it or reuse it as an installer.", "Problemas comunes y soluciones": "Common problems and solutions", "Cuando las cosas no van según el plan": "When things don't go to plan", "❌ La pool no aparece en el scan de importación": "❌ The pool doesn't appear in the import scan", "# Forzar búsqueda en todos los dispositivos": "# Force a search on all devices", "# Si los discos usan rutas /dev/disk/by-id (más estable)": "# If the disks use /dev/disk/by-id paths (more stable)", "# Ver todos los discos reconocidos": "# List all recognized disks", "❌ Error \"pool was previously in use\"": "❌ \"pool was previously in use\" error", "# Importar forzando (safe si estás seguro de que el sistema anterior está apagado)": "# Force the import (safe if you are sure the previous system is powered off)", "❌ Pool en estado DEGRADED tras importar": "❌ Pool in DEGRADED state after importing", "# Ver qué disco falta": "# See which disk is missing", "# Si el disco está presente pero con nombre diferente": "# If the disk is present but with a different name", "# Lanzar scrub para verificar": "# Launch a scrub to verify", "❌ Los shares SMB no son accesibles tras restaurar config": "❌ SMB shares are not accessible after restoring the config", "Verifica que el servicio SMB está activo en <strong>System → Services<\/strong>": "Check that the SMB service is running in <strong>System → Services<\/strong>", "Comprueba que los datasets tienen los permisos ACL correctos": "Check that the datasets have the correct ACL permissions", "Reinicia el servicio SMB desde la WebUI": "Restart the SMB service from the WebUI", "Comprueba el firewall si tienes uno": "Check the firewall if you have one", "❌ TrueNAS arranca en modo de mantenimiento": "❌ TrueNAS boots into maintenance mode", "# Desde la consola, importar pools manualmente": "# From the console, import the pools manually", "# Reiniciar servicios": "# Restart services", "❌ Apps de TrueNAS SCALE no funcionan": "❌ TrueNAS SCALE apps don't work", "Las apps son lo más delicado de migrar. Hasta 24.04 se ejecutaban sobre Kubernetes y desde 24.10 sobre Docker; sus datos viven en un dataset de apps dentro de la pool (<code>ix-applications<\/code> en las versiones antiguas, <code>ix-apps<\/code> en las recientes). Tras importar la pool, vuelve a seleccionarla como pool de apps desde la sección <strong>Apps<\/strong> (<strong>Choose Pool<\/strong>). Si tu versión nueva usa otro motor de apps que la antigua, puede que tengas que reinstalar las apps y reapuntarlas a tus datasets.": "Apps are the most delicate part to migrate. Up to 24.04 they ran on Kubernetes and from 24.10 on Docker; their data lives in an apps dataset inside the pool (<code>ix-applications<\/code> in older versions, <code>ix-apps<\/code> in recent ones). After importing the pool, select it again as the apps pool from the <strong>Apps<\/strong> section (<strong>Choose Pool<\/strong>). If your new version uses a different apps engine than the old one, you may have to reinstall the apps and point them back to your datasets.", "Tips y recomendaciones": "Tips and recommendations", "Para que esto no vuelva a ser un drama": "So this never becomes a drama again", "🔵 Usa un SSD pequeño en lugar de USB": "🔵 Use a small SSD instead of a USB", "Los USB convencionales tienen una vida útil limitada en escrituras. Para el boot de TrueNAS considera un SSD M.2 SATA barato (60-120 GB), un DOM (Disk on Module) industrial, o incluso un SSD de 2.5\" dedicado. Más fiable y más rápido.": "Conventional USB sticks have a limited write life. For the TrueNAS boot device consider a cheap M.2 SATA SSD (60-120 GB), an industrial DOM (Disk on Module), or even a dedicated 2.5\" SSD. More reliable and faster.", "🔵 Boot Mirror: dos USBs en espejo": "🔵 Boot Mirror: two USBs in a mirror", "TrueNAS permite instalar en dos USBs en modo mirror. Si uno falla, el otro sigue funcionando sin intervención. Ve a <strong>System → Boot → Boot Pool Status<\/strong> → <strong>Attach<\/strong> para añadir un segundo dispositivo al mirror de arranque.": "TrueNAS lets you install on two USBs in mirror mode. If one fails, the other keeps working without intervention. Go to <strong>System → Boot → Boot Pool Status<\/strong> → <strong>Attach<\/strong> to add a second device to the boot mirror.", "🔵 Automatiza el backup de configuración": "🔵 Automate the configuration backup", "Configura un script que exporte la configuración periódicamente a una pool o ubicación externa. Prográmalo como tarea periódica en <strong>System → Advanced Settings → Cron Jobs<\/strong> (los <em>Init/Shutdown Scripts<\/em> solo se ejecutan al arrancar o apagar). Un <code>cp<\/code> es una copia rápida de apoyo; el archivo oficial y portable sigue siendo <strong>Manage Configuration → Download File<\/strong> con el secret seed.": "Set up a script that exports the configuration periodically to a pool or an external location. Schedule it as a recurring task under <strong>System → Advanced Settings → Cron Jobs<\/strong> (<em>Init/Shutdown Scripts<\/em> only run at boot or shutdown). A <code>cp<\/code> is a quick support copy; the official, portable file remains <strong>Manage Configuration → Download File<\/strong> with the secret seed.", "#!/bin/bash # Script de backup automático de config TrueNAS # (el secret seed da acceso a datos cifrados: permisos restringidos)": "#!/bin/bash\n# Automatic TrueNAS config backup script\n# (the secret seed gives access to encrypted data: restricted permissions)", "# TrueNAS guarda la base de datos de configuración y el secret seed en:": "# TrueNAS keeps the configuration database and the secret seed at:", "# Mantener solo los últimos 10 backups": "# Keep only the last 10 backups", "🔵 Documenta tus pools y discos": "🔵 Document your pools and disks", "Guarda en algún lugar (papel, wiki, etc.) el mapeo de tus discos: número de serie → slot físico → nombre en pool. Cuando un disco falle a las 2 AM, lo agradecerás.": "Keep somewhere (paper, wiki, etc.) the mapping of your disks: serial number → physical slot → name in pool. When a disk fails at 2 AM, you'll be glad you did.", "✓ Resumen del proceso": "✓ Process summary", "Backup config → Apuntar pools → Apagar → Cambiar USB → Instalar TrueNAS → Importar pools → Restaurar config → Verificar": "Config backup → Note pools → Shut down → Swap USB → Install TrueNAS → Import pools → Restore config → Verify", ". El proceso completo suele llevar entre 30 y 60 minutos dependiendo del hardware.": ". The whole process usually takes between 30 and 60 minutes depending on the hardware.", "Guía para la comunidad hispanohablante · TrueNAS SCALE / CORE": "Guide for the Spanish-speaking community · TrueNAS SCALE / CORE", "2025 · Uso libre": "2025 · Free to use", "Ve a <strong>https://etcher.balena.io<\/strong>": "Go to <strong>https://etcher.balena.io<\/strong>"}</script>
+<script>window.__I18N={storeKey:"truenas-guide-lang"};</script>
+<script>
+(function(){
+  var BLOCK=/^(DIV|P|LI|UL|OL|TABLE|THEAD|TBODY|TFOOT|TR|TD|TH|H[1-6]|SECTION|PRE|BUTTON|SUMMARY|DETAILS|NAV|HEADER|FOOTER|ASIDE|MAIN|ARTICLE|FIGURE|FIGCAPTION|BLOCKQUOTE|DL|DT|DD|FORM|SELECT|OPTION|UL)$/;
+  var SKIP=/^(SCRIPT|STYLE|SVG|NOSCRIPT|TEMPLATE|TEXTAREA)$/;
+  function norm(s){return s.replace(/\s+/g,' ').trim();}
+  function hasBlock(el){var all=el.getElementsByTagName('*');for(var i=0;i<all.length;i++){if(BLOCK.test(all[i].tagName))return true;}return false;}
+  function collect(root){
+    var out=[];
+    (function walk(el,inPre){
+      if(SKIP.test(el.tagName)||el.hasAttribute&&el.hasAttribute('data-noi18n'))return;
+      var pre=inPre||el.tagName==='PRE';
+      if(!pre && el.textContent.trim() && !hasBlock(el) && el!==root){
+        out.push({el:el,key:norm(el.innerHTML),kind:'el'});return;
+      }
+      for(var n=el.firstChild;n;n=n.nextSibling){
+        if(n.nodeType===3){var k=norm(n.nodeValue);if(k)out.push({node:n,key:k,kind:pre?'pre':'text'});}
+        else if(n.nodeType===1)walk(n,pre);
+      }
+    })(root,false);
+    return out;
+  }
+  if(typeof module!=='undefined'&&module.exports){module.exports=collect;return;}
+  var cfg=window.__I18N||{};
+  var EN=JSON.parse(document.getElementById('i18n-data').textContent);
+  var KEY=cfg.storeKey||'guide-lang';
+  var items=null,titleEs=document.title;
+  var meta=document.querySelector('meta[name="description"]');var metaEs=meta?meta.getAttribute('content'):null;
+  function pick(){
+    var q=(location.search.match(/[?&]lang=(en|es)/)||[])[1];if(q)return q;
+    try{var s=localStorage.getItem(KEY);if(s==='en'||s==='es')return s;}catch(e){}
+    return /^es/i.test(navigator.language||'es')?'es':'en';
+  }
+  function apply(lang){
+    if(!items)items=collect(document.body).map(function(it){
+      if(it.el)it.es=it.el.innerHTML;else it.es=it.node.nodeValue;return it;});
+    items.forEach(function(it){
+      var en=EN[it.key];
+      if(lang==='en'&&en!==undefined){
+        if(it.el)it.el.innerHTML=en;
+        else{var m=it.es.match(/^(\s*)[\s\S]*?(\s*)$/);it.node.nodeValue=m[1]+en+m[2];}
+      }else{
+        if(it.el)it.el.innerHTML=it.es;else it.node.nodeValue=it.es;
+      }
+    });
+    document.documentElement.lang=lang;
+    document.title=(lang==='en'&&EN['__title'])?EN['__title']:titleEs;
+    if(meta&&metaEs!==null)meta.setAttribute('content',(lang==='en'&&EN['__desc'])?EN['__desc']:metaEs);
+    var bs=document.querySelectorAll('.i18n-sw button');
+    for(var i=0;i<bs.length;i++)bs[i].setAttribute('aria-pressed',bs[i].getAttribute('data-l')===lang?'true':'false');
+    try{localStorage.setItem(KEY,lang);}catch(e){}
+    try{var u=new URL(location.href);u.searchParams.set('lang',lang);history.replaceState(null,'',u);}catch(e){}
+  }
+  var sw=document.createElement('div');sw.className='i18n-sw';sw.setAttribute('role','group');sw.setAttribute('aria-label','Language / Idioma');
+  sw.innerHTML='<button type="button" data-l="es">ES</button><button type="button" data-l="en">EN</button>';
+  sw.addEventListener('click',function(e){var l=e.target.getAttribute&&e.target.getAttribute('data-l');if(l)apply(l);});
+  document.body.appendChild(sw);
+  apply(pick());
+})();
+</script>
+<!-- i18n:end -->
 </body>
 </html>
