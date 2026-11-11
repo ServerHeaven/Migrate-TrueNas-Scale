@@ -28,7 +28,7 @@ La página está en **español e inglés**. Usa el selector **ES / EN** (arriba 
 
 ### Ver la guía
 
-- Online (si GitHub Pages está activo en el repo): `https://serverheaven.github.io/migrate-truenas-scale/`
+- Online (si GitHub Pages está activo en el repo): https://serverheaven.github.io/Migrate-TrueNas-Scale/?lang=en
 - En local: abre `index.html` o ejecuta `python3 -m http.server 8000` y visita <http://localhost:8000>. Solo carga tipografías de Google Fonts; sin conexión usa las del sistema.
 
 ### Estructura
